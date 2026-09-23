@@ -1,0 +1,1357 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nate Interest Detector | Real-Time News & Topic Monitor</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              400: '#fb923c',
+              500: '#f97316',
+              600: '#ea580c',
+              700: '#c2410c',
+            },
+            surface: {
+              950: '#09090b',
+              900: '#121215',
+              850: '#18181c',
+              800: '#222227',
+              700: '#2f2f37',
+              600: '#3f3f48',
+              500: '#71717a'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+            mono: ['JetBrains Mono', 'Menlo', 'monospace']
+          },
+          boxShadow: {
+            'orange-glow': '0 0 20px -3px rgba(249, 115, 22, 0.25)',
+            'orange-sm': '0 0 10px -2px rgba(249, 115, 22, 0.35)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom sleek scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #09090b;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #27272f;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3f3f4a;
+    }
+
+    /* Keyword highlight styling */
+    .kw-highlight {
+      background-color: rgba(249, 115, 22, 0.22);
+      color: #fdba74;
+      font-weight: 700;
+      padding: 0.1rem 0.35rem;
+      border-radius: 0.25rem;
+      border: 1px solid rgba(249, 115, 22, 0.45);
+      text-shadow: 0 0 10px rgba(249, 115, 22, 0.4);
+    }
+  </style>
+</head>
+<body class="bg-surface-950 text-zinc-100 min-h-screen flex flex-col font-sans selection:bg-brand-500 selection:text-black">
+
+  <header class="bg-surface-900/90 border-b border-surface-800 backdrop-blur sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center space-x-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-amber-600 flex items-center justify-center text-white shadow-orange-sm">
+          <i data-lucide="crosshair" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-bold tracking-tight text-white text-base">Nate <span class="text-brand-500">Interest Detector</span></span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-surface-800 text-brand-400 border border-brand-500/30 font-mono font-semibold">LIVE RADAR</span>
+          </div>
+          <p class="text-xs text-zinc-400">Personalized breaking news & topic intelligence feed</p>
+        </div>
+      </div>
+
+      <!-- Action and Status Bar -->
+      <div class="flex items-center flex-wrap gap-2.5">
+        <div class="flex items-center bg-surface-950 border border-surface-800 rounded-lg px-3 py-1.5 text-xs text-zinc-300 gap-3">
+          <span class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-brand-500 animate-pulse"></span>
+            <span id="headerWatchlistCount">0 Tracked</span>
+          </span>
+          <span class="text-surface-700">|</span>
+          <span class="flex items-center gap-1.5">
+            <i data-lucide="bell" class="w-3.5 h-3.5 text-brand-400"></i>
+            <span id="headerMatchCount">0 Matches</span>
+          </span>
+        </div>
+
+        <button id="quickScanBtn" class="px-3 py-1.5 rounded-lg bg-surface-850 hover:bg-surface-800 text-xs text-zinc-200 border border-surface-700 hover:border-brand-500/50 transition flex items-center gap-1.5 shadow-sm">
+          <i data-lucide="refresh-cw" id="quickScanIcon" class="w-3.5 h-3.5 text-brand-500"></i>
+          <span>Check Now</span>
+        </button>
+
+        <button id="toggleAudioBtn" title="Toggle audio chime alert" class="p-2 rounded-lg bg-surface-850 hover:bg-surface-800 text-zinc-300 border border-surface-700 transition">
+          <i id="audioBtnIcon" data-lucide="volume-2" class="w-4 h-4 text-brand-500"></i>
+        </button>
+
+        <button id="desktopNotifBtn" title="Browser Desktop Notifications" class="p-2 rounded-lg bg-surface-850 hover:bg-surface-800 text-zinc-300 border border-surface-700 transition">
+          <i id="notifBtnIcon" data-lucide="bell-off" class="w-4 h-4 text-zinc-500"></i>
+        </button>
+
+        <button id="openSettingsModalBtn" title="Engine & Polling Settings" class="p-2 rounded-lg bg-surface-850 hover:bg-surface-800 text-zinc-300 border border-surface-700 transition">
+          <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <!-- LEFT COLUMN: Keywords Watchlist & Sources (5 cols) -->
+    <div class="lg:col-span-5 flex flex-col gap-6">
+
+      <!-- Add Keyword Form Card -->
+      <section class="bg-surface-900 border border-surface-800 rounded-2xl p-5 shadow-xl relative overflow-hidden">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-2">
+            <i data-lucide="plus-circle" class="w-4 h-4 text-brand-500"></i> Add Target Interest
+          </h2>
+          <span class="text-[10px] text-zinc-500 font-mono">INSTANT FILTER</span>
+        </div>
+
+        <form id="addKeywordForm" class="space-y-3.5">
+          <div>
+            <label class="block text-xs font-medium text-zinc-400 mb-1">Interest Keyword or Phrase</label>
+            <input type="text" id="keywordInput" required placeholder="e.g. artificial intelligence, Tesla, interest rates"
+              class="w-full bg-surface-950 border border-surface-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500 transition" />
+          </div>
+
+          <div class="grid grid-cols-2 gap-3 text-xs">
+            <label class="flex items-center space-x-2 bg-surface-950 p-2.5 rounded-xl border border-surface-800 cursor-pointer">
+              <input type="checkbox" id="kwWholeWord" checked class="rounded bg-surface-900 border-surface-700 text-brand-500 focus:ring-0 w-3.5 h-3.5">
+              <span class="text-zinc-300">Whole Word</span>
+            </label>
+            <label class="flex items-center space-x-2 bg-surface-950 p-2.5 rounded-xl border border-surface-800 cursor-pointer">
+              <input type="checkbox" id="kwCaseSensitive" class="rounded bg-surface-900 border-surface-700 text-brand-500 focus:ring-0 w-3.5 h-3.5">
+              <span class="text-zinc-300">Case-Sensitive</span>
+            </label>
+          </div>
+
+          <div class="flex items-center justify-between pt-1">
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-zinc-400">Badge Color:</span>
+              <div class="flex items-center gap-1.5" id="colorPickerGroup">
+                <button type="button" data-color="#f97316" class="w-5 h-5 rounded-full bg-brand-500 ring-2 ring-white ring-offset-2 ring-offset-surface-900"></button>
+                <button type="button" data-color="#eab308" class="w-5 h-5 rounded-full bg-amber-500 opacity-60 hover:opacity-100"></button>
+                <button type="button" data-color="#ef4444" class="w-5 h-5 rounded-full bg-red-500 opacity-60 hover:opacity-100"></button>
+                <button type="button" data-color="#06b6d4" class="w-5 h-5 rounded-full bg-cyan-500 opacity-60 hover:opacity-100"></button>
+              </div>
+            </div>
+
+            <button type="submit" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-semibold shadow-md shadow-brand-600/20 transition flex items-center gap-1.5">
+              <i data-lucide="plus" class="w-4 h-4"></i> Add Interest
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Active Watchlist Display -->
+      <section class="bg-surface-900 border border-surface-800 rounded-2xl p-5 shadow-xl flex flex-col flex-1">
+        <div class="flex items-center justify-between pb-3 border-b border-surface-800">
+          <div>
+            <h2 class="text-xs font-bold uppercase tracking-wider text-zinc-300">Monitored Interests</h2>
+            <p class="text-[11px] text-zinc-500" id="watchlistCountSubtitle">0 active phrases</p>
+          </div>
+          <div class="flex items-center gap-2">
+      <!-- Settings Modal -->
+      <div id="settingsModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-surface-900 border border-surface-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+          <div class="flex items-center justify-between pb-3 border-b border-surface-800">
+            <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+              <i data-lucide="sliders" class="w-4 h-4 text-brand-500"></i> Nate Interest Detector Settings
+            </h3>
+            <button id="closeSettingsModal" class="text-zinc-400 hover:text-white p-1 rounded-lg">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <div id="keywordsContainer" class="mt-3.5 space-y-2.5 overflow-y-auto max-h-[300px] pr-1">
+          <!-- Populated by JS -->
+        </div>
+      </section>
+
+      <!-- News Feed Sources Config Card -->
+      <section class="bg-surface-900 border border-surface-800 rounded-2xl p-5 shadow-xl">
+        <div class="flex items-center justify-between pb-2 mb-3 border-b border-surface-800">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-2">
+            <i data-lucide="rss" class="w-4 h-4 text-brand-500"></i> News Feed Sources
+          </h2>
+          <span class="text-[11px] text-zinc-500 font-mono" id="activeFeedCount">5 sources active</span>
+        </div>
+
+        <div id="sourcesContainer" class="space-y-2 mb-3.5 max-h-48 overflow-y-auto pr-1">
+          <!-- Populated by JS -->
+        </div>
+
+        <!-- Add Custom RSS source -->
+        <div class="flex gap-2">
+          <input type="url" id="customFeedUrlInput" placeholder="Add custom RSS / Atom URL..."
+            class="flex-1 bg-surface-950 border border-surface-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+          <button id="addCustomFeedBtn" class="px-3 py-1.5 bg-surface-800 hover:bg-surface-700 text-zinc-200 text-xs font-medium rounded-xl border border-surface-700 transition">
+            Add Feed
+          </button>
+        </div>
+      </section>
+
+      <!-- Instant Headline Tester -->
+      <section class="bg-surface-900 border border-surface-800 rounded-2xl p-5 shadow-xl">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2 flex items-center gap-2">
+          <i data-lucide="file-check-2" class="w-4 h-4 text-brand-500"></i> Instant Headline & Text Tester
+        </h2>
+        <p class="text-xs text-zinc-400 mb-2.5">Paste any article snippet or draft to instantly check against your watchlist:</p>
+        <textarea id="testHeadlineInput" rows="2" placeholder="Paste article text here..." class="w-full bg-surface-950 border border-surface-800 rounded-xl p-2.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono"></textarea>
+        <div class="flex items-center justify-between mt-2">
+          <button id="testSimulationBtn" class="text-[11px] text-zinc-400 hover:text-brand-400 underline">
+            Simulate Breaking Wire
+          </button>
+          <button id="runTestScanBtn" class="px-3 py-1.5 bg-surface-800 hover:bg-surface-700 text-zinc-200 rounded-xl text-xs font-medium border border-surface-700 transition">
+            Test Text
+          </button>
+        </div>
+      </section>
+
+    </div>
+
+    <div class="lg:col-span-7 flex flex-col gap-6">
+
+      <!-- Navigation Tabs & Actions -->
+      <div class="bg-surface-900 border border-surface-800 rounded-2xl p-2 flex items-center justify-between flex-wrap gap-2 shadow-xl">
+        <div class="flex items-center space-x-1.5">
+          <button id="tabAlertsBtn" class="px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 bg-brand-500/15 text-brand-400 border border-brand-500/30 transition">
+            <i data-lucide="bell" class="w-4 h-4"></i> Detected News
+            <span id="tabBadgeCount" class="bg-brand-500 text-black px-1.5 py-0.2 rounded-full font-mono text-[10px]">0</span>
+          </button>
+          <button id="tabLiveBtn" class="px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 text-zinc-400 hover:text-zinc-200 hover:bg-surface-800 transition">
+            <i data-lucide="activity" class="w-4 h-4"></i> All Ingested Stories
+          </button>
+        </div>
+
+        <div class="flex items-center gap-2 pr-1">
+          <select id="filterByKeywordSelect" class="bg-surface-950 border border-surface-800 text-zinc-300 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none">
+            <option value="ALL">All Keywords</option>
+          </select>
+          <button id="exportCsvBtn" title="Export detected articles to CSV" class="p-1.5 bg-surface-850 hover:bg-surface-800 text-zinc-300 rounded-xl border border-surface-700 text-xs flex items-center gap-1 px-2.5">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i> Export
+          </button>
+          <button id="clearMatchesBtn" title="Clear detected feed" class="p-2 bg-surface-850 hover:bg-surface-800 text-zinc-400 hover:text-red-400 rounded-xl border border-surface-700">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- VIEW 1: MATCHED ARTICLES (ALERTS) -->
+      <div id="alertsView" class="bg-surface-900 border border-surface-800 rounded-2xl p-5 shadow-xl flex-1 flex flex-col min-h-[500px]">
+        <div class="flex items-center justify-between pb-3 border-b border-surface-800">
+          <div>
+            <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-brand-500 shadow-orange-sm"></span>
+              Detected News Alerts
+            </h2>
+            <p class="text-xs text-zinc-400">Articles containing your monitored keywords or phrases</p>
+          </div>
+          <div class="text-xs font-mono text-zinc-500" id="lastCheckTimestamp">Last scan: Just now</div>
+        </div>
+
+        <!-- Matched Articles List -->
+        <div id="alertsContainer" class="flex-1 overflow-y-auto mt-4 space-y-3.5 pr-1 max-h-[680px]">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- VIEW 2: ALL INGESTED STORIES (RAW FEED STREAM) -->
+      <div id="liveStreamView" class="hidden bg-surface-900 border border-surface-800 rounded-2xl p-5 shadow-xl flex-1 flex flex-col min-h-[500px]">
+        <div class="flex items-center justify-between pb-3 border-b border-surface-800">
+          <div>
+            <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+              <i data-lucide="globe" class="w-4 h-4 text-zinc-400"></i> General Ingested Feed
+            </h2>
+            <p class="text-xs text-zinc-400">Latest headlines pulled from your active news sources</p>
+          </div>
+          <span class="text-xs font-mono text-zinc-400" id="rawArticlesCount">0 stories scanned</span>
+        </div>
+
+        <div id="rawFeedContainer" class="flex-1 overflow-y-auto mt-4 space-y-2.5 pr-1 max-h-[680px]">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <div id="toastStack" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none max-w-sm w-full"></div>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-surface-900 border border-surface-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+      <div class="flex items-center justify-between pb-3 border-b border-surface-800">
+        <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+          <i data-lucide="sliders" class="w-4 h-4 text-brand-500"></i> News Detector Settings
+        </h3>
+        <button id="closeSettingsModal" class="text-zinc-400 hover:text-white p-1 rounded-lg">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="space-y-4 py-4 text-xs">
+        <div>
+          <label class="block text-zinc-300 font-medium mb-1">Polling Interval</label>
+          <select id="pollingIntervalSelect" class="w-full bg-surface-950 border border-surface-800 rounded-xl px-3 py-2 text-white">
+            <option value="30000">Every 30 seconds</option>
+            <option value="60000" selected>Every 1 minute</option>
+            <option value="120000">Every 2 minutes</option>
+            <option value="300000">Every 5 minutes</option>
+            <option value="manual">Manual only (no auto-poll)</option>
+          </select>
+          <span class="text-[11px] text-zinc-500 mt-1 block">Background timer fetches all enabled news feeds and tests against active phrases.</span>
+        </div>
+
+        <div>
+          <label class="block text-zinc-300 font-medium mb-1">Alert Volume</label>
+          <div class="flex items-center gap-3">
+            <input type="range" id="soundVolumeRange" min="0" max="1" step="0.05" value="0.75" class="w-full accent-brand-500 cursor-pointer" />
+            <span id="soundVolumeReadout" class="font-mono text-zinc-400 w-8">75%</span>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-zinc-300 font-medium mb-1">Sound Tone Pattern</label>
+          <select id="soundToneSelect" class="w-full bg-surface-950 border border-surface-800 rounded-xl px-3 py-2 text-white">
+            <option value="double-chime">Modern Double Chime (Clean & Urgent)</option>
+            <option value="pulse">Pulse Ping</option>
+            <option value="breaking">Breaking News Fanfare</option>
+          </select>
+        </div>
+
+        <div class="pt-2 border-t border-surface-800 space-y-2.5">
+          <label class="flex items-center justify-between cursor-pointer">
+            <span class="text-zinc-300">Desktop Push Notifications</span>
+            <input type="checkbox" id="prefDesktopNotif" class="rounded bg-surface-950 border-surface-700 text-brand-500 focus:ring-0">
+          </label>
+          <label class="flex items-center justify-between cursor-pointer">
+            <span class="text-zinc-300">Play Audio Chime on Matches</span>
+            <input type="checkbox" id="prefSoundEnabled" checked class="rounded bg-surface-950 border-surface-700 text-brand-500 focus:ring-0">
+          </label>
+        </div>
+      </div>
+
+      <div class="pt-2 flex justify-between items-center border-t border-surface-800">
+        <button id="testAudioChimeBtn" class="px-3 py-1.5 bg-surface-800 hover:bg-surface-700 text-zinc-300 rounded-xl text-xs flex items-center gap-1.5 transition">
+          <i data-lucide="play" class="w-3.5 h-3.5 text-brand-500"></i> Test Audio
+        </button>
+        <button id="saveSettingsBtn" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-semibold">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const App = {
+      // Data state
+      keywords: [],
+      sources: [
+        { id: 'src_reuters', name: 'Reuters Top News', url: 'https://news.google.com/rss/headlines/section/topic/NATION', enabled: true },
+        { id: 'src_tech', name: 'Tech & AI Wire', url: 'https://news.google.com/rss/headlines/section/topic/TECHNOLOGY', enabled: true },
+        { id: 'src_business', name: 'Market & Economy', url: 'https://news.google.com/rss/headlines/section/topic/BUSINESS', enabled: true },
+        { id: 'src_hacker', name: 'Hacker News RSS', url: 'https://news.ycombinator.com/rss', enabled: true },
+        { id: 'src_verge', name: 'The Verge Feed', url: 'https://www.theverge.com/rss/index.xml', enabled: true },
+      ],
+      matchedArticles: [],
+      rawArticles: [],
+      seenGuids: new Set(),
+      selectedColor: '#f97316',
+
+      // Settings
+      settings: {
+        pollingInterval: 60000,
+        soundEnabled: true,
+        volume: 0.75,
+        tone: 'double-chime',
+        desktopNotif: false,
+      },
+
+      // Timers & Audio
+      pollTimer: null,
+      audioCtx: null,
+
+      init() {
+        this.loadStorage();
+        this.setupLucide();
+        this.bindEvents();
+        this.renderWatchlist();
+        this.renderSources();
+        this.renderAlerts();
+        this.renderRawFeed();
+        this.updateFilterDropdown();
+        this.checkNotificationStatus();
+        this.startPollingTimer();
+
+        // First run preset keywords if empty
+        if (this.keywords.length === 0) {
+          this.loadPresets(false);
+        }
+
+        // Run initial scan
+        setTimeout(() => this.pollAllFeeds(), 1000);
+      },
+
+      setupLucide() {
+        if (window.lucide) lucide.createIcons();
+      },
+
+      loadStorage() {
+        try {
+          const k = localStorage.getItem('np_keywords');
+          if (k) this.keywords = JSON.parse(k);
+
+          const s = localStorage.getItem('np_sources');
+          if (s) this.sources = JSON.parse(s);
+
+          const m = localStorage.getItem('np_matches');
+          if (m) this.matchedArticles = JSON.parse(m);
+
+          const seen = localStorage.getItem('np_seen_guids');
+          if (seen) this.seenGuids = new Set(JSON.parse(seen));
+
+          const cfg = localStorage.getItem('np_settings');
+          if (cfg) this.settings = Object.assign(this.settings, JSON.parse(cfg));
+        } catch (e) {
+          console.warn("Error reading localStorage:", e);
+        }
+      },
+
+      saveStorage() {
+        localStorage.setItem('np_keywords', JSON.stringify(this.keywords));
+        localStorage.setItem('np_sources', JSON.stringify(this.sources));
+        localStorage.setItem('np_matches', JSON.stringify(this.matchedArticles));
+        localStorage.setItem('np_seen_guids', JSON.stringify(Array.from(this.seenGuids)));
+        localStorage.setItem('np_settings', JSON.stringify(this.settings));
+      },
+
+      /* AUDIO SYNTHESIZER */
+      playAlertChime() {
+        if (!this.settings.soundEnabled) return;
+
+        try {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (!AudioContext) return;
+          if (!this.audioCtx) this.audioCtx = new AudioContext();
+          if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
+
+          const ctx = this.audioCtx;
+          const now = ctx.currentTime;
+          const gainNode = ctx.createGain();
+          gainNode.gain.setValueAtTime(this.settings.volume, now);
+          gainNode.connect(ctx.destination);
+
+          if (this.settings.tone === 'pulse') {
+            const osc = ctx.createOscillator();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(660, now);
+            osc.frequency.exponentialRampToValueAtTime(880, now + 0.15);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+            osc.connect(gainNode);
+            osc.start(now);
+            osc.stop(now + 0.25);
+          } else if (this.settings.tone === 'breaking') {
+            [523.25, 659.25, 783.99, 1046.50].forEach((freq, idx) => {
+              const osc = ctx.createOscillator();
+              const noteGain = ctx.createGain();
+              osc.type = 'triangle';
+              osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+              noteGain.gain.setValueAtTime(0.3, now + idx * 0.08);
+              noteGain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.2);
+              osc.connect(noteGain);
+              noteGain.connect(gainNode);
+              osc.start(now + idx * 0.08);
+              osc.stop(now + idx * 0.08 + 0.21);
+            });
+          } else {
+            // Default crisp double-chime
+            [880, 1174.66].forEach((freq, idx) => {
+              const osc = ctx.createOscillator();
+              const noteGain = ctx.createGain();
+              osc.type = 'sine';
+              osc.frequency.setValueAtTime(freq, now + idx * 0.12);
+              noteGain.gain.setValueAtTime(0.4, now + idx * 0.12);
+              noteGain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.12 + 0.35);
+              osc.connect(noteGain);
+              noteGain.connect(gainNode);
+              osc.start(now + idx * 0.12);
+              osc.stop(now + idx * 0.12 + 0.36);
+            });
+          }
+        } catch (e) {
+          console.warn("Web Audio chime failed:", e);
+        }
+      },
+
+      /* NOTIFICATIONS */
+      checkNotificationStatus() {
+        const notifIcon = document.getElementById('notifBtnIcon');
+        const modalToggle = document.getElementById('prefDesktopNotif');
+        if (!("Notification" in window)) return;
+
+        if (Notification.permission === "granted") {
+          this.settings.desktopNotif = true;
+          if (notifIcon) {
+            notifIcon.setAttribute('data-lucide', 'bell');
+            notifIcon.classList.replace('text-zinc-500', 'text-brand-500');
+          }
+          if (modalToggle) modalToggle.checked = true;
+        } else {
+          this.settings.desktopNotif = false;
+          if (notifIcon) {
+            notifIcon.setAttribute('data-lucide', 'bell-off');
+            notifIcon.classList.replace('text-brand-500', 'text-zinc-500');
+          }
+          if (modalToggle) modalToggle.checked = false;
+        }
+        this.setupLucide();
+      },
+
+      async requestDesktopPermissions() {
+        if (!("Notification" in window)) {
+          this.showToast('Desktop notifications not supported in this browser.', 'error');
+          return;
+        }
+        const res = await Notification.requestPermission();
+        this.checkNotificationStatus();
+        if (res === 'granted') {
+          this.showToast('Desktop push notifications enabled!', 'success');
+        }
+      },
+
+      triggerAlert(matchedItem) {
+        this.playAlertChime();
+
+        // Native Desktop Notification
+        if (this.settings.desktopNotif && window.Notification && Notification.permission === "granted") {
+          try {
+            const notif = new Notification(`Interest Detected: "${matchedItem.matchedPhrase}"`, {
+              body: `${matchedItem.title}\nSource: ${matchedItem.source}`,
+              icon: 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=128&auto=format&fit=crop&q=80',
+            });
+            notif.onclick = () => {
+              window.open(matchedItem.link, '_blank');
+            };
+          } catch (e) {
+            console.warn("Notification error:", e);
+          }
+        }
+
+        // In-app Toast
+        this.showMatchedToast(matchedItem);
+      },
+
+      showMatchedToast(item) {
+        const stack = document.getElementById('toastStack');
+        if (!stack) return;
+
+        const el = document.createElement('div');
+        el.className = "pointer-events-auto transform transition-all duration-300 translate-y-4 opacity-0 p-3.5 rounded-xl border border-brand-500/50 bg-surface-900/95 shadow-orange-glow text-xs flex items-start gap-3 backdrop-blur";
+        el.innerHTML = `
+          <div class="mt-0.5 w-2 h-2 rounded-full bg-brand-500 flex-shrink-0 animate-ping"></div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between gap-1 mb-1">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-brand-400">KEYWORD MATCH: ${this.escapeHTML(item.matchedPhrase)}</span>
+              <span class="text-[10px] text-zinc-500 font-mono">${this.escapeHTML(item.source)}</span>
+            </div>
+            <a href="${item.link}" target="_blank" class="font-medium text-white hover:text-brand-300 line-clamp-2 underline">
+              ${this.escapeHTML(item.title)}
+            </a>
+          </div>
+          <button class="text-zinc-500 hover:text-white" onclick="this.parentElement.remove()">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          </button>
+        `;
+
+        stack.appendChild(el);
+        requestAnimationFrame(() => el.classList.remove('translate-y-4', 'opacity-0'));
+        setTimeout(() => {
+          el.classList.add('opacity-0', 'translate-y-2');
+          setTimeout(() => el.remove(), 300);
+        }, 6000);
+      },
+
+      showToast(text, type = 'info') {
+        const stack = document.getElementById('toastStack');
+        if (!stack) return;
+        const el = document.createElement('div');
+        el.className = `pointer-events-auto transition-all p-3 rounded-xl border text-xs shadow-xl backdrop-blur ${
+          type === 'error' ? 'bg-red-950/90 border-red-800 text-red-200' :
+          type === 'success' ? 'bg-surface-900/95 border-brand-500/60 text-brand-300' :
+          'bg-surface-900/95 border-surface-700 text-zinc-200'
+        }`;
+        el.textContent = text;
+        stack.appendChild(el);
+        setTimeout(() => el.remove(), 3500);
+      },
+
+      scanStory(article, sourceName) {
+        const textToCheck = `${article.title} ${article.description || ''} ${article.content || ''}`;
+        const activeKeywords = this.keywords.filter(k => k.enabled !== false);
+        const matchesFound = [];
+
+        activeKeywords.forEach(kw => {
+          let matched = false;
+          let matchedString = kw.phrase;
+
+          if (kw.wholeWord) {
+            const escaped = this.escapeRegExp(kw.phrase);
+            const flags = kw.caseSensitive ? '' : 'i';
+            const re = new RegExp(`\\b${escaped}\\b`, flags);
+            const res = textToCheck.match(re);
+            if (res) {
+              matched = true;
+              matchedString = res[0];
+            }
+          } else {
+            const haystack = kw.caseSensitive ? textToCheck : textToCheck.toLowerCase();
+            const needle = kw.caseSensitive ? kw.phrase : kw.phrase.toLowerCase();
+            if (haystack.includes(needle)) {
+              matched = true;
+            }
+          }
+
+          if (matched) {
+            matchesFound.push({
+              keywordId: kw.id,
+              phrase: kw.phrase,
+              matchedToken: matchedString,
+              color: kw.color || '#f97316'
+            });
+            kw.matchCount = (kw.matchCount || 0) + 1;
+          }
+        });
+
+        if (matchesFound.length > 0) {
+          const articleGuid = article.guid || article.link || article.title;
+          const isNewArticle = !this.seenGuids.has(articleGuid);
+          this.seenGuids.add(articleGuid);
+
+          matchesFound.forEach(m => {
+            const matchRecord = {
+              id: 'match_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+              guid: articleGuid,
+              title: article.title,
+              link: article.link || '#',
+              description: article.description || '',
+              source: sourceName,
+              pubDate: article.pubDate || new Date().toISOString(),
+              detectedAt: new Date().toISOString(),
+              matchedPhrase: m.phrase,
+              matchedToken: m.matchedToken,
+              badgeColor: m.color,
+              isRead: false
+            };
+
+            // Prepend match
+            this.matchedArticles.unshift(matchRecord);
+
+            // Trigger notification only if it was newly ingested
+            if (isNewArticle) {
+              this.triggerAlert(matchRecord);
+            }
+          });
+
+          // Limit matches list size
+          if (this.matchedArticles.length > 300) {
+            this.matchedArticles = this.matchedArticles.slice(0, 300);
+          }
+
+          this.saveStorage();
+          this.renderWatchlist();
+          this.renderAlerts();
+          this.updateFilterDropdown();
+        }
+      },
+
+      async fetchSingleFeed(source) {
+        if (!source.enabled) return;
+
+        // Try direct RSS via rss2json, with allorigins fallback
+        const targetUrl = source.url;
+        let items = null;
+
+        try {
+          const api1 = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(targetUrl)}`;
+          const res = await fetch(api1);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.status === 'ok' && data.items) {
+              items = data.items.map(i => ({
+                title: i.title,
+                link: i.link,
+                description: i.description ? i.description.replace(/<[^>]*>?/gm, '').trim() : '',
+                pubDate: i.pubDate,
+                guid: i.guid || i.link || i.title
+              }));
+            }
+          }
+        } catch (e) {
+          console.warn(`Primary proxy failed for ${source.name}, falling back...`, e);
+        }
+
+        // Fallback: fetch via AllOrigins XML parse
+        if (!items) {
+          try {
+            const api2 = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+            const res = await fetch(api2);
+            if (res.ok) {
+              const wrapper = await res.json();
+              if (wrapper.contents) {
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(wrapper.contents, "text/xml");
+                const xmlItems = Array.from(xmlDoc.querySelectorAll("item, entry")).slice(0, 15);
+                items = xmlItems.map(node => {
+                  const title = node.querySelector("title")?.textContent || "Untitled";
+                  const link = node.querySelector("link")?.textContent || node.querySelector("link")?.getAttribute("href") || "#";
+                  const desc = node.querySelector("description, summary, content")?.textContent || "";
+                  const pubDate = node.querySelector("pubDate, updated")?.textContent || new Date().toISOString();
+                  return {
+                    title,
+                    link,
+                    description: desc.replace(/<[^>]*>?/gm, '').trim(),
+                    pubDate,
+                    guid: link || title
+                  };
+                });
+              }
+            }
+          } catch (err2) {
+            console.warn(`Fallback proxy also failed for ${source.name}`, err2);
+          }
+        }
+
+        if (items && items.length > 0) {
+          items.forEach(article => {
+            // Keep in raw list
+            this.rawArticles.unshift({ ...article, source: source.name });
+            // Scan for keyword triggers
+            this.scanStory(article, source.name);
+          });
+
+          // Trim raw feeds
+          if (this.rawArticles.length > 200) {
+            this.rawArticles = this.rawArticles.slice(0, 200);
+          }
+          this.renderRawFeed();
+        }
+      },
+
+      async pollAllFeeds() {
+        const icon = document.getElementById('quickScanIcon');
+        if (icon) icon.classList.add('animate-spin');
+
+        const promises = this.sources.filter(s => s.enabled).map(s => this.fetchSingleFeed(s));
+        await Promise.allSettled(promises);
+
+        if (icon) icon.classList.remove('animate-spin');
+        const ts = document.getElementById('lastCheckTimestamp');
+        if (ts) ts.textContent = `Last scan: ${new Date().toLocaleTimeString()}`;
+      },
+
+      startPollingTimer() {
+        if (this.pollTimer) clearInterval(this.pollTimer);
+        if (this.settings.pollingInterval !== 'manual') {
+          const ms = parseInt(this.settings.pollingInterval, 10) || 60000;
+          this.pollTimer = setInterval(() => {
+            this.pollAllFeeds();
+          }, ms);
+        }
+      },
+
+      renderWatchlist() {
+        const container = document.getElementById('keywordsContainer');
+        const headBadge = document.getElementById('headerWatchlistCount');
+        const sub = document.getElementById('watchlistCountSubtitle');
+        if (!container) return;
+
+        const activeCount = this.keywords.filter(k => k.enabled).length;
+        if (headBadge) headBadge.textContent = `${activeCount} Tracked`;
+        if (sub) sub.textContent = `${activeCount} active phrases (${this.keywords.length} total)`;
+
+        if (this.keywords.length === 0) {
+          container.innerHTML = `
+            <div class="text-center py-8 text-zinc-500 text-xs">
+              <i data-lucide="hash" class="w-6 h-6 mx-auto mb-1.5 text-zinc-600"></i>
+              <p>No keywords tracked yet.</p>
+              <button onclick="App.loadPresets()" class="text-brand-400 hover:underline mt-1 font-medium">Load Recommended Topics</button>
+            </div>
+          `;
+          this.setupLucide();
+          return;
+        }
+
+        container.innerHTML = this.keywords.map(kw => {
+          return `
+            <div class="group flex items-center justify-between p-2.5 rounded-xl border transition ${
+              kw.enabled ? 'bg-surface-950/80 border-surface-800 hover:border-surface-700' : 'bg-surface-950/30 border-surface-900 opacity-50'
+            }">
+              <div class="flex items-center space-x-2.5 min-w-0">
+                <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background-color: ${kw.color || '#f97316'}"></span>
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-semibold text-white truncate ${kw.enabled ? '' : 'line-through text-zinc-500'}">${this.escapeHTML(kw.phrase)}</span>
+                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-surface-900 border border-surface-700 font-mono text-zinc-400">
+                      ${kw.matchCount || 0} hits
+                    </span>
+                  </div>
+                  <div class="text-[10px] text-zinc-500 flex gap-2">
+                    <span>${kw.wholeWord ? 'Whole Word' : 'Any Match'}</span>
+                    ${kw.caseSensitive ? '<span>• Exact Case</span>' : ''}
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex items-center space-x-1">
+                <button onclick="App.toggleKeyword('${kw.id}')" title="${kw.enabled ? 'Pause' : 'Activate'}" class="p-1 text-zinc-400 hover:text-white rounded">
+                  <i data-lucide="${kw.enabled ? 'check-circle-2' : 'circle'}" class="w-4 h-4 ${kw.enabled ? 'text-brand-500' : 'text-zinc-600'}"></i>
+                </button>
+                <button onclick="App.deleteKeyword('${kw.id}')" title="Remove" class="p-1 text-zinc-400 hover:text-red-400 rounded">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        this.setupLucide();
+      },
+
+      renderSources() {
+        const container = document.getElementById('sourcesContainer');
+        const countSubtitle = document.getElementById('activeFeedCount');
+        if (!container) return;
+
+        const activeSources = this.sources.filter(s => s.enabled).length;
+        if (countSubtitle) countSubtitle.textContent = `${activeSources} of ${this.sources.length} sources active`;
+
+        container.innerHTML = this.sources.map(src => {
+          return `
+            <div class="flex items-center justify-between p-2 rounded-xl bg-surface-950 border border-surface-800 text-xs">
+              <div class="flex items-center gap-2 min-w-0">
+                <input type="checkbox" onchange="App.toggleSource('${src.id}')" ${src.enabled ? 'checked' : ''} class="rounded bg-surface-900 border-surface-700 text-brand-500 focus:ring-0 w-3.5 h-3.5">
+                <span class="truncate text-zinc-300 font-medium">${this.escapeHTML(src.name)}</span>
+              </div>
+              <button onclick="App.deleteSource('${src.id}')" class="text-zinc-500 hover:text-red-400 p-1">
+                <i data-lucide="trash" class="w-3 h-3"></i>
+              </button>
+            </div>
+          `;
+        }).join('');
+
+        this.setupLucide();
+      },
+
+      renderAlerts() {
+        const container = document.getElementById('alertsContainer');
+        const headBadge = document.getElementById('headerMatchCount');
+        const tabBadge = document.getElementById('tabBadgeCount');
+        const filterVal = document.getElementById('filterByKeywordSelect')?.value || 'ALL';
+
+        if (!container) return;
+
+        const filtered = filterVal === 'ALL'
+          ? this.matchedArticles
+          : this.matchedArticles.filter(a => a.matchedPhrase.toLowerCase() === filterVal.toLowerCase());
+
+        if (headBadge) headBadge.textContent = `${this.matchedArticles.length} Matches`;
+        if (tabBadge) tabBadge.textContent = `${this.matchedArticles.length}`;
+
+        if (filtered.length === 0) {
+          container.innerHTML = `
+            <div class="text-center py-16 text-zinc-500 text-xs flex flex-col items-center">
+              <i data-lucide="check-circle" class="w-10 h-10 text-zinc-600 mb-2 stroke-[1.5]"></i>
+              <p class="font-medium text-zinc-400">No news alerts triggered yet.</p>
+              <p class="text-[11px] text-zinc-600 mt-1">When articles containing your monitored phrases are published, they appear here instantly.</p>
+              <button onclick="App.simulateBreakingNews()" class="mt-3 text-xs bg-surface-800 hover:bg-surface-700 text-brand-400 border border-surface-700 px-3 py-1.5 rounded-xl transition">
+                Simulate Breaking News Wire
+              </button>
+            </div>
+          `;
+          this.setupLucide();
+          return;
+        }
+
+        container.innerHTML = filtered.map(item => {
+          const dateStr = new Date(item.pubDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' • ' + new Date(item.pubDate).toLocaleDateString([], { month: 'short', day: 'numeric' });
+          const highlightedTitle = this.highlightWord(item.title, item.matchedToken || item.matchedPhrase);
+          const highlightedDesc = this.highlightWord(item.description, item.matchedToken || item.matchedPhrase);
+
+          return `
+            <div class="p-4 rounded-xl border border-surface-800 bg-surface-950/70 hover:border-brand-500/40 hover:bg-surface-950 transition duration-150">
+              <div class="flex items-center justify-between gap-2 mb-2">
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider text-black" style="background-color: ${item.badgeColor || '#f97316'}">
+                    ${this.escapeHTML(item.matchedPhrase)}
+                  </span>
+                  <span class="text-[11px] text-zinc-400 font-mono">${this.escapeHTML(item.source)}</span>
+                </div>
+                <span class="text-[10px] text-zinc-500 font-mono">${dateStr}</span>
+              </div>
+
+              <h3 class="text-sm font-semibold text-white leading-snug mb-1.5">
+                ${highlightedTitle}
+              </h3>
+
+              ${item.description ? `
+                <p class="text-xs text-zinc-400 line-clamp-2 leading-relaxed mb-3">
+                  ${highlightedDesc}
+                </p>
+              ` : ''}
+
+              <div class="flex items-center justify-between pt-2 border-t border-surface-800/80">
+                <a href="${item.link}" target="_blank" rel="noopener noreferrer" class="text-xs font-semibold text-brand-400 hover:text-brand-300 flex items-center gap-1">
+                  <span>Read Full Article</span>
+                  <i data-lucide="arrow-up-right" class="w-3.5 h-3.5"></i>
+                </a>
+
+                <div class="flex items-center gap-2">
+                  <button onclick="App.copyArticleInfo('${item.id}')" title="Copy headline & link" class="p-1.5 text-zinc-400 hover:text-white rounded-lg bg-surface-900 border border-surface-800">
+                    <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                  </button>
+                  <button onclick="App.dismissMatch('${item.id}')" title="Dismiss" class="p-1.5 text-zinc-400 hover:text-red-400 rounded-lg bg-surface-900 border border-surface-800">
+                    <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        this.setupLucide();
+      },
+
+      renderRawFeed() {
+        const container = document.getElementById('rawFeedContainer');
+        const countSpan = document.getElementById('rawArticlesCount');
+        if (!container) return;
+
+        if (countSpan) countSpan.textContent = `${this.rawArticles.length} stories scanned`;
+
+        if (this.rawArticles.length === 0) {
+          container.innerHTML = `
+            <div class="text-center py-16 text-zinc-500 text-xs">
+              <p>No ingested articles yet. Click "Check Now" to query active sources.</p>
+            </div>
+          `;
+          return;
+        }
+
+        container.innerHTML = this.rawArticles.slice(0, 40).map(a => {
+          return `
+            <div class="p-3 rounded-xl border border-surface-800/80 bg-surface-950/40 text-xs hover:bg-surface-950 transition">
+              <div class="flex items-center justify-between text-[10px] text-zinc-500 mb-1">
+                <span class="text-zinc-400 font-medium">${this.escapeHTML(a.source)}</span>
+                <span>${new Date(a.pubDate || Date.now()).toLocaleTimeString()}</span>
+              </div>
+              <a href="${a.link}" target="_blank" class="font-medium text-zinc-200 hover:text-white line-clamp-1 hover:underline">
+                ${this.escapeHTML(a.title)}
+              </a>
+            </div>
+          `;
+        }).join('');
+      },
+
+      updateFilterDropdown() {
+        const select = document.getElementById('filterByKeywordSelect');
+        if (!select) return;
+
+        const currentVal = select.value;
+        const uniquePhrases = Array.from(new Set(this.matchedArticles.map(a => a.matchedPhrase)));
+
+        select.innerHTML = '<option value="ALL">All Keywords</option>' +
+          uniquePhrases.map(p => `<option value="${this.escapeHTML(p)}">${this.escapeHTML(p)}</option>`).join('');
+
+        if (uniquePhrases.includes(currentVal)) {
+          select.value = currentVal;
+        }
+      },
+
+      highlightWord(text, word) {
+        if (!text || !word) return this.escapeHTML(text || '');
+        const escaped = this.escapeRegExp(word);
+        const re = new RegExp(`(${escaped})`, 'gi');
+        const safe = this.escapeHTML(text);
+        return safe.replace(re, `<mark class="kw-highlight">$1</mark>`);
+      },
+
+      addKeyword(phrase, wholeWord, caseSensitive, color) {
+        if (!phrase.trim()) return;
+        const newKw = {
+          id: 'kw_' + Date.now(),
+          phrase: phrase.trim(),
+          wholeWord: !!wholeWord,
+          caseSensitive: !!caseSensitive,
+          color: color || '#f97316',
+          enabled: true,
+          matchCount: 0,
+          createdAt: new Date().toISOString()
+        };
+
+        this.keywords.unshift(newKw);
+        this.saveStorage();
+        this.renderWatchlist();
+        this.showToast(`Tracking phrase: "${phrase.trim()}"`, 'success');
+
+        // Immediately check current ingested feed against new keyword
+        this.rawArticles.forEach(art => this.scanStory(art, art.source));
+      },
+
+      toggleKeyword(id) {
+        const target = this.keywords.find(k => k.id === id);
+        if (target) {
+          target.enabled = !target.enabled;
+          this.saveStorage();
+          this.renderWatchlist();
+        }
+      },
+
+      deleteKeyword(id) {
+        this.keywords = this.keywords.filter(k => k.id !== id);
+        this.saveStorage();
+        this.renderWatchlist();
+      },
+
+      clearAllKeywords() {
+        if (this.keywords.length === 0) return;
+        this.keywords = [];
+        this.saveStorage();
+        this.renderWatchlist();
+      },
+
+      loadPresets(notify = true) {
+        const presets = [
+          { phrase: 'artificial intelligence', color: '#f97316', wholeWord: true },
+          { phrase: 'interest rates', color: '#eab308', wholeWord: false },
+          { phrase: 'Tesla', color: '#ef4444', wholeWord: true },
+          { phrase: 'cyberattack', color: '#06b6d4', wholeWord: true },
+        ];
+
+        presets.forEach(p => {
+          if (!this.keywords.some(k => k.phrase.toLowerCase() === p.phrase.toLowerCase())) {
+            this.keywords.push({
+              id: 'kw_' + Math.random().toString(36).substr(2, 8),
+              phrase: p.phrase,
+              wholeWord: p.wholeWord,
+              caseSensitive: false,
+              color: p.color,
+              enabled: true,
+              matchCount: 0,
+              createdAt: new Date().toISOString()
+            });
+          }
+        });
+
+        this.saveStorage();
+        this.renderWatchlist();
+        if (notify) this.showToast('Popular topics added to watchlist.', 'success');
+      },
+
+      toggleSource(id) {
+        const src = this.sources.find(s => s.id === id);
+        if (src) {
+          src.enabled = !src.enabled;
+          this.saveStorage();
+          this.renderSources();
+        }
+      },
+
+      deleteSource(id) {
+        this.sources = this.sources.filter(s => s.id !== id);
+        this.saveStorage();
+        this.renderSources();
+      },
+
+      addCustomSource(url) {
+        if (!url || !url.startsWith('http')) {
+          this.showToast('Please enter a valid URL starting with http/https', 'error');
+          return;
+        }
+
+        const newSrc = {
+          id: 'src_' + Date.now(),
+          name: new URL(url).hostname.replace('www.', ''),
+          url: url.trim(),
+          enabled: true
+        };
+
+        this.sources.push(newSrc);
+        this.saveStorage();
+        this.renderSources();
+        this.showToast(`Added source: ${newSrc.name}`, 'success');
+        this.fetchSingleFeed(newSrc);
+      },
+
+      dismissMatch(matchId) {
+        this.matchedArticles = this.matchedArticles.filter(m => m.id !== matchId);
+        this.saveStorage();
+        this.renderAlerts();
+        this.updateFilterDropdown();
+      },
+
+      clearAllMatches() {
+        this.matchedArticles = [];
+        this.saveStorage();
+        this.renderAlerts();
+        this.updateFilterDropdown();
+      },
+
+      copyArticleInfo(id) {
+        const m = this.matchedArticles.find(a => a.id === id);
+        if (!m) return;
+        const text = `${m.title}\nSource: ${m.source}\nLink: ${m.link}`;
+        const tArea = document.createElement('textarea');
+        tArea.value = text;
+        document.body.appendChild(tArea);
+        tArea.select();
+        try {
+          document.execCommand('copy');
+          this.showToast('Headline and link copied to clipboard.', 'info');
+        } catch (e) {
+          console.error(e);
+        }
+        document.body.removeChild(tArea);
+      },
+
+      exportCSV() {
+        if (this.matchedArticles.length === 0) {
+          this.showToast('No detected matches to export.', 'error');
+          return;
+        }
+
+        const headers = ["DetectedAt", "Keyword", "Source", "Title", "Link"];
+        const rows = this.matchedArticles.map(m => [
+          `"${m.detectedAt}"`,
+          `"${m.matchedPhrase.replace(/"/g, '""')}"`,
+          `"${m.source.replace(/"/g, '""')}"`,
+          `"${m.title.replace(/"/g, '""')}"`,
+          `"${m.link.replace(/"/g, '""')}"`
+        ]);
+
+        const content = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+        const encodedUri = encodeURI(content);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `nate_interest_matches_${Date.now()}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      },
+
+      simulateBreakingNews() {
+        const pool = [
+          { title: "BREAKING: Federal Reserve announces unexpected adjustment to interest rates amid market rally", desc: "Economists analyze shifts across regional central banks as borrowing costs stabilize.", src: "Global Finance Wire" },
+          { title: "Tesla unveils next-generation autonomous driving compute platform in surprise keynote", desc: "Shares shifted 4% in extended trading following the manufacturing demonstration.", src: "Automotive Daily" },
+          { title: "Tech Consortium reveals novel artificial intelligence framework with sub-second reasoning", desc: "A breakthrough open-weights model claims top benchmarks across mathematical queries.", src: "Silicon Dispatch" },
+          { title: "Government agencies publish urgent warning over coordinated cyberattack targeting cloud backups", desc: "Security officials recommend immediate multifactor enforcement for all endpoints.", src: "Cyber Desk" },
+          { title: "Global pharmaceutical giant secures historic FDA approval for rare condition therapy", desc: "Clinical trials demonstrated high efficacy without severe secondary complications.", src: "Health Sciences" },
+        ];
+
+        const item = pool[Math.floor(Math.random() * pool.length)];
+        const article = {
+          title: item.title,
+          description: item.desc,
+          link: "https://news.google.com",
+          pubDate: new Date().toISOString(),
+          guid: 'sim_' + Date.now()
+        };
+
+        this.rawArticles.unshift({ ...article, source: item.src });
+        this.renderRawFeed();
+        this.scanStory(article, item.src);
+      },
+
+      bindEvents() {
+        // Tab switching
+        const tabAlerts = document.getElementById('tabAlertsBtn');
+        const tabLive = document.getElementById('tabLiveBtn');
+        const viewAlerts = document.getElementById('alertsView');
+        const viewLive = document.getElementById('liveStreamView');
+
+        tabAlerts?.addEventListener('click', () => {
+          tabAlerts.className = "px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 bg-brand-500/15 text-brand-400 border border-brand-500/30 transition";
+          tabLive.className = "px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 text-zinc-400 hover:text-zinc-200 hover:bg-surface-800 transition";
+          viewAlerts.classList.remove('hidden');
+          viewLive.classList.add('hidden');
+        });
+
+        tabLive?.addEventListener('click', () => {
+          tabLive.className = "px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 bg-brand-500/15 text-brand-400 border border-brand-500/30 transition";
+          tabAlerts.className = "px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 text-zinc-400 hover:text-zinc-200 hover:bg-surface-800 transition";
+          viewLive.classList.remove('hidden');
+          viewAlerts.classList.add('hidden');
+        });
+
+        // Add Keyword Form
+        document.getElementById('addKeywordForm')?.addEventListener('submit', (e) => {
+          e.preventDefault();
+          const input = document.getElementById('keywordInput');
+          const wholeWord = document.getElementById('kwWholeWord').checked;
+          const caseSens = document.getElementById('kwCaseSensitive').checked;
+          this.addKeyword(input.value, wholeWord, caseSens, this.selectedColor);
+          input.value = '';
+        });
+
+        // Color Picker buttons
+        document.querySelectorAll('#colorPickerGroup button').forEach(btn => {
+          btn.addEventListener('click', () => {
+            document.querySelectorAll('#colorPickerGroup button').forEach(b => {
+              b.classList.remove('ring-2', 'ring-white', 'ring-offset-2', 'ring-offset-surface-900', 'opacity-100');
+              b.classList.add('opacity-60');
+            });
+            btn.classList.add('ring-2', 'ring-white', 'ring-offset-2', 'ring-offset-surface-900', 'opacity-100');
+            btn.classList.remove('opacity-60');
+            this.selectedColor = btn.getAttribute('data-color');
+          });
+        });
+
+        // Buttons
+        document.getElementById('quickScanBtn')?.addEventListener('click', () => this.pollAllFeeds());
+        document.getElementById('loadPresetKeywordsBtn')?.addEventListener('click', () => this.loadPresets());
+        document.getElementById('clearAllKeywordsBtn')?.addEventListener('click', () => this.clearAllKeywords());
+        document.getElementById('clearMatchesBtn')?.addEventListener('click', () => this.clearAllMatches());
+        document.getElementById('exportCsvBtn')?.addEventListener('click', () => this.exportCSV());
+        document.getElementById('testSimulationBtn')?.addEventListener('click', () => this.simulateBreakingNews());
+
+        // Instant headline tester
+        document.getElementById('runTestScanBtn')?.addEventListener('click', () => {
+          const text = document.getElementById('testHeadlineInput')?.value;
+          if (text && text.trim()) {
+            this.scanStory({
+              title: text,
+              description: '',
+              link: '#',
+              pubDate: new Date().toISOString()
+            }, 'Manual Test');
+          }
+        });
+
+        // Add custom feed
+        document.getElementById('addCustomFeedBtn')?.addEventListener('click', () => {
+          const input = document.getElementById('customFeedUrlInput');
+          if (input && input.value) {
+            this.addCustomSource(input.value);
+            input.value = '';
+          }
+        });
+
+        // Toggle Audio Header
+        const audioBtn = document.getElementById('toggleAudioBtn');
+        const audioIcon = document.getElementById('audioBtnIcon');
+        audioBtn?.addEventListener('click', () => {
+          this.settings.soundEnabled = !this.settings.soundEnabled;
+          if (audioIcon) {
+            if (this.settings.soundEnabled) {
+              audioIcon.setAttribute('data-lucide', 'volume-2');
+              audioIcon.classList.replace('text-zinc-500', 'text-brand-500');
+            } else {
+              audioIcon.setAttribute('data-lucide', 'volume-x');
+              audioIcon.classList.replace('text-brand-500', 'text-zinc-500');
+            }
+          }
+          this.saveStorage();
+          this.setupLucide();
+        });
+
+        // Desktop Notification Header Button
+        document.getElementById('desktopNotifBtn')?.addEventListener('click', () => {
+          this.requestDesktopPermissions();
+        });
+
+        // Filter dropdown
+        document.getElementById('filterByKeywordSelect')?.addEventListener('change', () => {
+          this.renderAlerts();
+        });
+
+        // Settings Modal
+        const settingsModal = document.getElementById('settingsModal');
+        document.getElementById('openSettingsModalBtn')?.addEventListener('click', () => {
+          settingsModal?.classList.remove('hidden');
+        });
+        document.getElementById('closeSettingsModal')?.addEventListener('click', () => {
+          settingsModal?.classList.add('hidden');
+        });
+
+        // Volume range readout
+        const volRange = document.getElementById('soundVolumeRange');
+        const volReadout = document.getElementById('soundVolumeReadout');
+        volRange?.addEventListener('input', (e) => {
+          if (volReadout) volReadout.textContent = `${Math.round(e.target.value * 100)}%`;
+        });
+
+        document.getElementById('testAudioChimeBtn')?.addEventListener('click', () => {
+          this.playAlertChime();
+        });
+
+        document.getElementById('saveSettingsBtn')?.addEventListener('click', () => {
+          const interval = document.getElementById('pollingIntervalSelect').value;
+          const vol = parseFloat(document.getElementById('soundVolumeRange').value);
+          const tone = document.getElementById('soundToneSelect').value;
+          const sound = document.getElementById('prefSoundEnabled').checked;
+
+          this.settings.pollingInterval = interval;
+          this.settings.volume = vol;
+          this.settings.tone = tone;
+          this.settings.soundEnabled = sound;
+
+          this.saveStorage();
+          this.startPollingTimer();
+          settingsModal?.classList.add('hidden');
+          this.showToast('Settings saved.', 'success');
+        });
+      },
+
+      /* Regex Helper */
+      escapeRegExp(str) {
+        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      },
+
+      escapeHTML(str) {
+        if (!str) return '';
+        return str.replace(/[&<>'"]/g, t => ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          "'": '&#39;',
+          '"': '&quot;'
+        }[t] || t));
+      }
+    };
+
+    window.addEventListener('DOMContentLoaded', () => {
+      App.init();
+    });
+  </script>
+</body>
+</html>
